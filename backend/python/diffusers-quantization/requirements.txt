@@ -4,3 +4,4 @@ pillow
 protobuf
 certifi
 av
+bitsandbytes

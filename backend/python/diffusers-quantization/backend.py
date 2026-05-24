@@ -445,6 +445,25 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
             if not DISABLE_CPU_OFFLOAD:
                 pipe.enable_model_cpu_offload()
             return pipe
+        
+        # QwenImageEditPipeline - image editing pipeline
+        if pipeline_type == "QwenImageEditPipeline":
+            self.image_edit = True
+
+            pipe = load_diffusers_pipeline(
+                class_name="QwenImageEditPipeline",
+                model_id=request.Model,
+                torch_dtype=torchType,
+                device_map=device_map
+            )
+            pipe.set_progress_bar_config(disable=None)
+            pipe.to(torch.bfloat16)
+            pipe.to("cuda")
+
+            if request.LowVRAM and hasattr(pipe, 'enable_model_cpu_offload'):
+                pipe.enable_model_cpu_offload()
+
+            return pipe
 
         # ================================================================
         # Dynamic pipeline loading - the default path for most pipelines
@@ -565,7 +584,8 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
             self.img2vid = False
             self.txt2vid = False
             self.ltx2_pipeline = False
-
+            self.image_edit = False
+            
             print(f"LoadModel: PipelineType from request: {request.PipelineType}", file=sys.stderr)
 
             # Determine device_map for multi-GPU support based on TensorParallelSize
@@ -799,7 +819,46 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
             video_frames = self.pipe(prompt, guidance_scale=self.cfg_scale, num_inference_steps=steps, num_frames=int(FRAMES)).frames
             export_to_video(video_frames, request.dst)
             return backend_pb2.Result(message="Media generated successfully", success=True)
+        # QwenImageEditPipeline handling
+        if hasattr(self, "image_edit") and self.image_edit:
+            if not image_src:
+                return backend_pb2.Result(
+                    success=False,
+                    message="QwenImageEditPipeline requires an input image"
+                )
 
+            try:
+                edit_image = Image.open(image_src).convert("RGB")
+                true_cfg_scale = self.options.get("true_cfg_scale", 4.0)
+
+                inputs = {
+                    "image": edit_image,
+                    "prompt": prompt,
+                    "negative_prompt": request.negative_prompt if hasattr(request, 'negative_prompt') else " ",
+                    "generator": torch.manual_seed(request.seed if request.seed > 0 else 0),
+                    "true_cfg_scale": true_cfg_scale,
+                    "num_inference_steps": steps,
+                }
+
+                with torch.inference_mode():
+                    output = self.pipe(**inputs)
+                    result = output.images[0]
+                    result.save(request.dst)
+
+                return backend_pb2.Result(
+                    message="Image edited successfully",
+                    success=True
+                )
+
+            except Exception as err:
+                print(f"QwenImageEditPipeline error: {err}", file=sys.stderr)
+                traceback.print_exc()
+
+                return backend_pb2.Result(
+                    success=False,
+                    message=f"QwenImageEditPipeline error: {err}"
+                )
+        
         print(f"Generating image with {kwargs=}", file=sys.stderr)
         image = {}
         if COMPEL:

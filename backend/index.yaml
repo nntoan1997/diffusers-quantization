@@ -1,0 +1,26 @@
+---
+- &diffusers-quantization
+  name: "diffusers-quantization"
+  icon: https://raw.githubusercontent.com/huggingface/diffusers/main/docs/source/en/imgs/diffusers_library.jpg
+  uri: "docker.io/ftzsolution/localai-backend-diffusers-quantization"
+  description: |
+    🤗 Diffusers is the go-to library for state-of-the-art pretrained diffusion models for generating images, audio, and even 3D structures of molecules. Whether you're looking for a simple inference solution or training your own diffusion models, 🤗 Diffusers is a modular toolbox that supports both.
+  urls:
+    - https://github.com/huggingface/diffusers
+  tags:
+    - image-generation
+    - video-generation
+    - diffusion-models
+  license: apache-2.0
+  alias: "diffusers-quantization"
+  capabilities:
+    nvidia: "cuda12-diffusers-quantization"
+    intel: "intel-diffusers-quantization"
+    amd: "rocm-diffusers-quantization"
+    nvidia-l4t: "nvidia-l4t-diffusers-quantization"
+    metal: "metal-diffusers-quantization"
+    default: "cpu-diffusers-quantization"
+    nvidia-cuda-13: "cuda13-diffusers-quantization"
+    nvidia-cuda-12: "cuda12-diffusers-quantization"
+    nvidia-l4t-cuda-12: "nvidia-l4t-arm64-diffusers-quantization"
+    nvidia-l4t-cuda-13: "cuda13-nvidia-l4t-arm64-diffusers-quantization"
