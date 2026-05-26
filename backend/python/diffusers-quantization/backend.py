@@ -14,6 +14,7 @@ import signal
 import sys
 import time
 import os
+import random
 
 from PIL import Image
 import torch
@@ -38,6 +39,8 @@ from diffusers_dynamic_loader import (
 # Import specific items still needed for special cases and safety checker
 from diffusers import DiffusionPipeline, ControlNetModel
 from diffusers import FluxPipeline, FluxTransformer2DModel, AutoencoderKLWan
+from diffusers import QwenImageEditPlusPipeline
+
 from diffusers.pipelines.stable_diffusion import safety_checker
 from diffusers.utils import load_image, export_to_video
 # TODO: re-enable compel as a hard dependency once it supports transformers >= 5.
@@ -446,22 +449,11 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
                 pipe.enable_model_cpu_offload()
             return pipe
         
-        # QwenImageEditPipeline - image editing pipeline
-        if pipeline_type == "QwenImageEditPipeline":
-            self.image_edit = True
-
-            pipe = load_diffusers_pipeline(
-                class_name="QwenImageEditPipeline",
-                model_id=request.Model,
-                torch_dtype=torchType,
-                device_map=device_map
-            )
-            pipe.set_progress_bar_config(disable=None)
-            pipe.to(torch.bfloat16)
+        # QwenImageEditPlusPipeline - image editing pipeline
+        if pipeline_type == "QwenImageEditPlusPipeline":
+            pipe = QwenImageEditPlusPipeline.from_pretrained(request.Model, torch_dtype=torch.bfloat16)
             pipe.to("cuda")
-
-            if request.LowVRAM and hasattr(pipe, 'enable_model_cpu_offload'):
-                pipe.enable_model_cpu_offload()
+            pipe.set_progress_bar_config(disable=None)
 
             return pipe
 
@@ -584,7 +576,6 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
             self.img2vid = False
             self.txt2vid = False
             self.ltx2_pipeline = False
-            self.image_edit = False
             
             print(f"LoadModel: PipelineType from request: {request.PipelineType}", file=sys.stderr)
 
@@ -736,6 +727,18 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
                 curr_layer.weight.data += multiplier * alpha * torch.mm(weight_up, weight_down)
 
     def GenerateImage(self, request, context):
+        print("\n========== GenerateImage ==========", file=sys.stderr)
+
+        print("\n--- REQUEST ---", file=sys.stderr)
+        print(request, file=sys.stderr)
+
+        print("\n--- CONTEXT ---", file=sys.stderr)
+        print(context, file=sys.stderr)
+
+        print("\n--- SELF ---", file=sys.stderr)
+        print(vars(self), file=sys.stderr)
+
+        print("===================================\n", file=sys.stderr)
 
         prompt = request.positive_prompt
 
@@ -819,31 +822,34 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
             video_frames = self.pipe(prompt, guidance_scale=self.cfg_scale, num_inference_steps=steps, num_frames=int(FRAMES)).frames
             export_to_video(video_frames, request.dst)
             return backend_pb2.Result(message="Media generated successfully", success=True)
-        # QwenImageEditPipeline handling
-        if hasattr(self, "image_edit") and self.image_edit:
-            if not image_src:
-                return backend_pb2.Result(
-                    success=False,
-                    message="QwenImageEditPipeline requires an input image"
-                )
-
+            
+        # QwenImageEditPlusPipeline handling
+        if self.PipelineType == "QwenImageEditPlusPipeline":
             try:
-                edit_image = Image.open(image_src).convert("RGB")
-                true_cfg_scale = self.options.get("true_cfg_scale", 4.0)
+                if hasattr(request, 'seed') and request.seed and request.seed > 0:
+                    current_seed = request.seed
+                else:
+                    current_seed = random.randint(1, 2**32 - 1)
+
+                images = []
+                img = Image.open(request.src).convert("RGB")
+                images.append(img)
 
                 inputs = {
-                    "image": edit_image,
+                    "image": images,
                     "prompt": prompt,
                     "negative_prompt": request.negative_prompt if hasattr(request, 'negative_prompt') else " ",
-                    "generator": torch.manual_seed(request.seed if request.seed > 0 else 0),
-                    "true_cfg_scale": true_cfg_scale,
-                    "num_inference_steps": steps,
+                    "generator": torch.manual_seed(current_seed),
+                    "true_cfg_scale": 4.0,
+                    "num_inference_steps": request.step,
+                    "guidance_scale": self.options.get("guidance_scale", 1.0),
+                    "height": request.height,
+                    "width ": request.width,
                 }
 
-                with torch.inference_mode():
-                    output = self.pipe(**inputs)
-                    result = output.images[0]
-                    result.save(request.dst)
+                output = self.pipe(**inputs)
+                result = output.images[0]
+                result.save(request.dst)
 
                 return backend_pb2.Result(
                     message="Image edited successfully",
