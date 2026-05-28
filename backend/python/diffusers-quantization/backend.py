@@ -835,6 +835,10 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
                 img = Image.open(request.src).convert("RGB")
                 images.append(img)
 
+                for img_path in request.ref_images:
+                    img = Image.open(img_path).convert("RGB")
+                    images.append(img)
+
                 inputs = {
                     "image": images,
                     "prompt": prompt,
@@ -844,7 +848,7 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
                     "num_inference_steps": request.step,
                     "guidance_scale": self.options.get("guidance_scale", 1.0),
                     "height": request.height,
-                    "width ": request.width,
+                    "width": request.width,
                 }
 
                 output = self.pipe(**inputs)

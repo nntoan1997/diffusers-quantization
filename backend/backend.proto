@@ -305,6 +305,9 @@ message GenerateImageRequest {
   // Diffusers
   string EnableParameters = 10;
   int32 CLIPSkip = 11;
+
+  // Multiple reference images
+  repeated string ref_images = 12;
 }
 
 message GenerateVideoRequest {
