@@ -1,7 +1,7 @@
-export CONDA_ENV_PATH = "diffusers-quantization.yml"
+export CONDA_ENV_PATH = "diffusers.yml"
 
 ifeq ($(BUILD_TYPE), hipblas)
-export CONDA_ENV_PATH = "diffusers-quantization-rocm.yml"
+export CONDA_ENV_PATH = "diffusers-rocm.yml"
 endif
 
 # Intel GPU are supposed to have dependencies installed in the main python
@@ -11,17 +11,17 @@ ifneq (,$(findstring sycl,$(BUILD_TYPE)))
 export SKIP_CONDA=1
 endif
 
-.PHONY: diffusers-quantization
-diffusers-quantization:
+.PHONY: diffusers
+diffusers:
 	bash install.sh
 
 .PHONY: run
-run: diffusers-quantization
-	@echo "Running diffusers-quantization..."
+run: diffusers
+	@echo "Running diffusers..."
 	bash run.sh
-	@echo "diffusers-quantization run."
+	@echo "Diffusers run."
 
-test: diffusers-quantization
+test: diffusers
 	bash test.sh
 
 .PHONY: protogen-clean

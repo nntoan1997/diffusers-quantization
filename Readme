@@ -1,4 +1,4 @@
-docker build -f backend/Dockerfile.python --build-arg BACKEND=diffusers-quantization --build-arg BUILD_TYPE=cublas --build-arg CUDA_MAJOR_VERSION=13 --build-arg CUDA_MINOR_VERSION=0 -t localai-backend-diffusers-quantization .
+docker build -f backend/Dockerfile.python --build-arg BACKEND=diffusers-quantization --build-arg BUILD_TYPE=cublas --build-arg CUDA_MAJOR_VERSION=13 --build-arg CUDA_MINOR_VERSION=1 -t localai-backend-diffusers-quantization .
 
 docker tag localai-backend-diffusers-quantization:latest ftzsolution/localai-backend-diffusers-quantization:latest
 
